@@ -58,17 +58,18 @@ function handleEvent(e: Event) {
   span.setAttribute('class', 'loader');
 
   const id = span.closest('div[id]')!.id
+  const div = e.currentTarget! as HTMLElement
   invoke('handle_confirmation', {name: accountElement!.textContent, id: id, accept: accept})
   .then(() => {
-    renderConfirmationResult(e.currentTarget! as HTMLElement, id)
+    renderConfirmationResult(div, id)
   })
   .catch((error) => {
-    renderConfirmationResult(e.currentTarget! as HTMLElement, id, error)
+    renderConfirmationResult(div, id, error)
   });
 }
 
 function renderConfirmationResult(div: HTMLElement, id: string, error?: any) {
-  const element = div.querySelector('#'+id);
+  const element = div.querySelector('[id="'+id+'"]');
   if(element) {
     const span = element.querySelector('span');
     if(span) {
