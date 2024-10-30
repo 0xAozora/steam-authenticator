@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import './timer-ring/timer-ring';
+
 let accountElement: Element | null;
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -27,8 +29,9 @@ async function main() {
     accountElement = list.firstElementChild;
     accountElement?.dispatchEvent(new Event('click',{ bubbles: true }))
 
-    const div = document.getElementById('confirmations');
-    div?.addEventListener('click', handleEvent, true);
+    document.getElementsByTagName('timer-ring')[0].addEventListener('animationiteration', () => loadCode(accountElement?.textContent!));
+    document.getElementById('code')?.addEventListener('click', (e) => navigator.clipboard.writeText((e.target as HTMLElement).textContent!))
+    document.getElementById('confirmations')?.addEventListener('click', handleEvent);
   } catch (error) {
     console.error("Failed to load JSON files:", error);
     alert("Error: " + error);
@@ -36,7 +39,46 @@ async function main() {
 }
 
 function handleEvent(e: Event) {
-  console.log(e);
+
+  e.stopPropagation();
+  const target = e.composedPath()[0] as HTMLElement;
+
+  let accept: boolean = false;;
+  switch(target.id) {
+    case 'accept':
+      accept = true;
+    case 'cancel':
+      break;
+    default:
+      return;
+  }
+
+  const span = target.parentElement!;
+  span.innerHTML = '';
+  span.setAttribute('class', 'loader');
+
+  const id = span.closest('div[id]')!.id
+  invoke('handle_confirmation', {name: accountElement!.textContent, id: id, accept: accept})
+  .then(() => {
+    renderConfirmationResult(e.currentTarget! as HTMLElement, id)
+  })
+  .catch((error) => {
+    renderConfirmationResult(e.currentTarget! as HTMLElement, id, error)
+  });
+}
+
+function renderConfirmationResult(div: HTMLElement, id: string, error?: any) {
+  const element = div.querySelector('#'+id);
+  if(element) {
+    const span = element.querySelector('span');
+    if(span) {
+      let attribute = 'ok';
+      if(error) attribute = 'error';
+      else error = 'Ok';
+      span.setAttribute('class', attribute);
+      span.textContent = error;
+    }
+  }
 }
 
 async function loadAccount(e: Event) {
@@ -48,12 +90,16 @@ async function loadAccount(e: Event) {
   originalTarget.setAttribute('checked', '');
   accountElement = originalTarget;
 
-  const code = (await invoke('get_code', {name: originalTarget.textContent})) as string;
-  const p = document.getElementsByTagName('p')[0];
-  p.textContent = code;
+  await loadCode(originalTarget.textContent!)
 
   // Confirmations
   getConfirmations();
+}
+
+async function loadCode(account: string) {
+  const code = (await invoke('get_code', {name: account})) as string;
+  const element = document.getElementById('code') as HTMLElement;
+  element.textContent = code;
 }
 
 interface Confirmation {
@@ -66,17 +112,22 @@ interface Confirmation {
 }
 
 function getConfirmations() {
-  invoke('get_confirmations', {name: accountElement!.textContent, refresh: false}).then((confirmations) => renderConfirmations(confirmations as Confirmation[]))
+  const div = document.getElementById('confirmations')! as HTMLElement;
+
+  const span = document.createElement('span');
+  span.setAttribute('class', 'loader');
+  div.innerHTML = '';
+  div.appendChild(span);
+
+  invoke('get_confirmations', {name: accountElement!.textContent, refresh: false}).then((confirmations) => renderConfirmations(div, confirmations as Confirmation[]))
   .catch((error) => {
     console.error(error)
-    const div = document.getElementById('confirmations');
-    div!.innerHTML = '';
-    renderLogin(div!, error)
+    div.innerHTML = '';
+    renderLogin(div, error)
   });
 }
 
-function renderConfirmations(confirmations: Confirmation[]) {
-  const div = document.getElementById('confirmations')!;
+function renderConfirmations(div: HTMLElement, confirmations: Confirmation[]) {
   div.innerHTML = '';
   if(!confirmations.length) {
     div.innerHTML = 'No confirmations';

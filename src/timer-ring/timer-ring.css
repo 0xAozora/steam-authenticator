@@ -1,0 +1,27 @@
+:host {
+    display: inline-block;
+
+    width: 32px;
+    height: 32px;
+    animation: t 30s linear infinite;
+}
+
+@keyframes t {
+    to {
+        --t: 0;
+    }
+}
+
+svg {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+[r] {
+    fill: none;
+    --k: calc(var(--t)/30);
+    transform: rotate(-90deg);
+    /*stroke-linecap: round;*/
+    stroke: color-mix(in hsl shorter hue, #8a9b0f calc(var(--k)*100%), #940a3d);
+    stroke-dasharray: var(--k) 1;
+}

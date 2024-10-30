@@ -252,7 +252,7 @@ fn login(state: State<AppState>, name: &str, password: &str) -> Result<(), Strin
         }
     }
 	
-   return Ok(());
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -280,7 +280,7 @@ fn get_confirmations(state: State<AppState>, name: &str, refresh: bool) -> Resul
         let map = state.confirmationCache.lock().unwrap();
         if let Some(confs) = map.get(name) {
             if confs.len() != 0 {
-                return Ok(conf_to_Info(confs))
+                return Ok(conf_to_info(confs))
             }
         }
     }
@@ -305,11 +305,11 @@ fn get_confirmations(state: State<AppState>, name: &str, refresh: bool) -> Resul
         match confirmer.get_confirmations() {
             Ok(confs) => {
                 
-                let confirmationInfos = conf_to_Info(&confs);
+                let confirmation_infos = conf_to_info(&confs);
 
                 state.confirmationCache.lock().unwrap().insert(account.account_name.clone(), confs);
 
-                return Ok(confirmationInfos)
+                return Ok(confirmation_infos)
 
             }
             Err(steamguard::ConfirmerError::InvalidTokens) => {
@@ -321,7 +321,7 @@ fn get_confirmations(state: State<AppState>, name: &str, refresh: bool) -> Resul
                 }
                 count += 1;
 
-                let client = steamguard::steamapi::AuthenticationClient::new(transport);
+                let client = steamguard::steamapi::AuthenticationClient::new(transport.clone());
                 let mut refresher = steamguard::refresher::TokenRefresher::new(client);
 
                 let tokens = account.tokens.as_mut().unwrap();
@@ -330,7 +330,7 @@ fn get_confirmations(state: State<AppState>, name: &str, refresh: bool) -> Resul
                     Err(err) => return Err(err.to_string())
                 }
 
-                return Err("Invalid Tokens".to_string());
+                //return Err("Invalid Tokens".to_string());
                 //crate::do_login(transport.clone(), &mut account, args.password.clone())?;
             }
             Err(err) => {
@@ -341,10 +341,10 @@ fn get_confirmations(state: State<AppState>, name: &str, refresh: bool) -> Resul
     }
 }
 
-fn conf_to_Info(confs: &Vec<steamguard::Confirmation>) -> Vec<ConfirmationInfo> {
-    let mut confirmationInfos: Vec<ConfirmationInfo> = Vec::new();
+fn conf_to_info(confs: &Vec<steamguard::Confirmation>) -> Vec<ConfirmationInfo> {
+    let mut confirmation_infos: Vec<ConfirmationInfo> = Vec::new();
 
-    confs.iter().for_each(|confirmation| confirmationInfos.push(ConfirmationInfo{
+    confs.iter().for_each(|confirmation| confirmation_infos.push(ConfirmationInfo{
         conf_type: conf_to_u32(&confirmation.conf_type),
         type_name: confirmation.type_name.clone(),
         id: confirmation.id.clone(),
@@ -360,7 +360,45 @@ fn conf_to_Info(confs: &Vec<steamguard::Confirmation>) -> Vec<ConfirmationInfo> 
         summary: confirmation.summary.clone(),
     }));
 
-    return confirmationInfos
+    return confirmation_infos;
+}
+
+#[tauri::command]
+fn handle_confirmation(state: State<AppState>, name: &str, id: &str, accept: bool) -> Result<(), String> {
+
+    let mut map = state.accounts.lock().unwrap();
+    let account = map.get_mut(name).unwrap();
+
+    let mut map = state.confirmationCache.lock().unwrap();
+    let confirmations = map.get_mut(name).unwrap();
+
+    if let Some(index) = confirmations.iter().position(|conf| conf.id == id) {
+
+        let confirmation = unsafe { confirmations.get_unchecked(index) };
+
+        let http_client = reqwest::blocking::Client::builder();
+        let http_client = http_client.build().unwrap();
+        let transport = steamguard::transport::WebApiTransport::new(http_client);
+    
+        let confirmer = steamguard::Confirmer::new(transport, &account);
+
+        let result: Result<(), steamguard::ConfirmerError>;
+        if accept {
+            result = confirmer.accept_confirmation(confirmation);
+        } else {
+            result = confirmer.deny_confirmation(confirmation);
+        }
+        
+        match result {
+            Ok(()) => {confirmations.remove(index);},
+            Err(err) => return Err(err.to_string()),
+        }
+
+    } else {
+        return Err("Confirmation does not exist.".to_string());
+    }
+
+    Ok(())
 }
 
 fn build_device_details() -> steamguard::DeviceDetails {
@@ -379,11 +417,9 @@ fn build_device_details() -> steamguard::DeviceDetails {
 
 fn main() {
 
-    // The path where the JSON files are stored.
-
     // Load the JSON names at the start of the program.
-    let mut accounts = load_accounts().unwrap_or(HashMap::new());
-    let mut cache = HashMap::new();
+    let accounts = load_accounts().unwrap_or(HashMap::new());
+    let cache = HashMap::new();
 
     tauri::Builder::default().manage(AppState {
          accounts: Mutex::new(accounts), confirmationCache: Mutex::new(cache)
@@ -392,6 +428,7 @@ fn main() {
             get_stored_names,
             get_code,
             get_confirmations,
+            handle_confirmation,
             login,
         ])
         .plugin(tauri_plugin_shell::init())
