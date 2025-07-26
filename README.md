@@ -18,3 +18,6 @@ Developed using the [steamguard crate](https://crates.io/crates/steamguard) and 
 
 ## Setup
 Put existing .maFile(s) in an "./accounts" directory
+
+## Funding
+Solana: BrgkGfjgMoPR7YVqunxHSQDjhg158WN9YdzcvxvCS4vT

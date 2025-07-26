@@ -1,4 +1,3 @@
-
 use steamguard::ConfirmationType;
 
 pub fn conf_to_u32(t: &ConfirmationType) -> u32 {
@@ -11,6 +10,6 @@ pub fn conf_to_u32(t: &ConfirmationType) -> u32 {
         ConfirmationType::AccountRecovery => 6,
         ConfirmationType::ApiKeyCreation => 9,
         ConfirmationType::JoinSteamFamily => 11,
-        ConfirmationType::Unknown(val) => *val,  // Return the associated u32 value
+        ConfirmationType::Unknown(val) => *val, // Return the associated u32 value
     }
 }
